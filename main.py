@@ -25,7 +25,7 @@ def root():
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
     if not OPENAI_API_KEY:
-        raise HTTPException(500, "Missing OPENAI_API_KEY")
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY chưa set")
 
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
@@ -33,16 +33,23 @@ async def chat(req: ChatRequest):
     }
 
     payload = {
-        "model": "gpt-4o-mini",
+        "model": "gpt-4.1-mini",
         "messages": req.messages,
         "temperature": 0.7,
+        "max_tokens": 1000
     }
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         res = await client.post(
             "https://api.openai.com/v1/chat/completions",
             headers=headers,
-            json=payload,
+            json=payload
         )
 
-    return res.json()
+    if res.status_code != 200:
+        raise HTTPException(status_code=res.status_code, detail=res.text)
+
+    data = res.json()
+    return {
+        "reply": data["choices"][0]["message"]["content"]
+    }
