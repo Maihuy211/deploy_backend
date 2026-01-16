@@ -29,29 +29,33 @@ async def chat(req: Request):
     if not message:
         return {"error": "Message is required"}
 
-    if not GEMINI_API_KEY:
-        return {"error": "Missing GEMINI_API_KEY"}
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 
     payload = {
         "contents": [
             {
-                "parts": [{"text": message}]
+                "parts": [
+                    {"text": message}
+                ]
             }
         ]
     }
 
+    headers = {
+        "Content-Type": "application/json"
+    }
+
     try:
-        res = requests.post(url, json=payload, timeout=60)
+        res = requests.post(url, json=payload, headers=headers, timeout=60)
         data = res.json()
 
         if "candidates" not in data:
-            return {"error": str(data)}
+            return {"error": data}
 
         reply = data["candidates"][0]["content"]["parts"][0]["text"]
 
         return {"reply": reply}
 
     except Exception as e:
+        print(e)
         return {"error": str(e)}
