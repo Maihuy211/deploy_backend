@@ -1,6 +1,6 @@
 import os
 import requests
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -23,37 +23,35 @@ def home():
 
 @app.post("/api/chat")
 async def chat(req: Request):
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Missing GEMINI_API_KEY")
-
     body = await req.json()
     message = body.get("message")
 
     if not message:
-        raise HTTPException(status_code=400, detail="Message is required")
+        return {"error": "Message is required"}
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    if not GEMINI_API_KEY:
+        return {"error": "Missing GEMINI_API_KEY"}
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
 
     payload = {
         "contents": [
             {
-                "parts": [
-                    {"text": message}
-                ]
+                "parts": [{"text": message}]
             }
         ]
     }
 
     try:
-        res = requests.post(url, json=payload, timeout=30)
+        res = requests.post(url, json=payload, timeout=60)
         data = res.json()
 
         if "candidates" not in data:
-            return {"error": data}
+            return {"error": str(data)}
 
         reply = data["candidates"][0]["content"]["parts"][0]["text"]
+
         return {"reply": reply}
 
     except Exception as e:
-        print("ERROR:", e)
-        raise HTTPException(status_code=500, detail="Server error")
+        return {"error": str(e)}
