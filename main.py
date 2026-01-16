@@ -1,55 +1,59 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import os
-import httpx
+import requests
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-class ChatRequest(BaseModel):
-    messages: list
 
 @app.get("/")
-def root():
-    return {"status": "Backend running"}
+def home():
+    return {"status": "ok"}
+
 
 @app.post("/api/chat")
-async def chat(req: ChatRequest):
-    if not OPENAI_API_KEY:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY chưa set")
+async def chat(req: Request):
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="Missing GEMINI_API_KEY")
 
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json",
-    }
+    body = await req.json()
+    message = body.get("message")
+
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 
     payload = {
-        "model": "gpt-4.1-mini",
-        "messages": req.messages,
-        "temperature": 0.7,
-        "max_tokens": 1000
+        "contents": [
+            {
+                "parts": [
+                    {"text": message}
+                ]
+            }
+        ]
     }
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers=headers,
-            json=payload
-        )
+    try:
+        res = requests.post(url, json=payload, timeout=30)
+        data = res.json()
 
-    if res.status_code != 200:
-        raise HTTPException(status_code=res.status_code, detail=res.text)
+        if "candidates" not in data:
+            return {"error": data}
 
-    data = res.json()
-    return {
-        "reply": data["choices"][0]["message"]["content"]
-    }
+        reply = data["candidates"][0]["content"]["parts"][0]["text"]
+        return {"reply": reply}
+
+    except Exception as e:
+        print("ERROR:", e)
+        raise HTTPException(status_code=500, detail="Server error")
